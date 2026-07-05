@@ -5,6 +5,7 @@ import com.example.archat.domain.model.Chat;
 import com.example.archat.domain.repository.ChatRepository;
 import com.example.archat.domain.service.ChatService;
 import com.example.archat.infrastructure.api.GenAIChatProvider;
+import com.example.archat.infrastructure.api.GroqChatProvider;
 import com.example.archat.infrastructure.repository.InMemoryChatRepository;
 
 import java.time.ZonedDateTime;
@@ -13,14 +14,16 @@ import java.util.List;
 public class GeminiChatService implements ChatService {
 
     private final ChatRepository chatRepository;
-    private final ChatProvider chatProvider;
+    private final ChatProvider geminiProvider;
+    private final ChatProvider groqProvider;
 
     @Override
     public void save(Chat chat) {
         chatRepository.save(chat);
 //        String aiResponse = useAI(chat);
         List<Chat> history = chatRepository.findAllByUserId(chat.userId());
-        String aiResponse = chatProvider.useAI(chat, history);
+        ChatProvider provider = selectProvider(chat.model());
+        String aiResponse = provider.useAI(chat, history);
         Chat aiChat = new Chat(
                 aiResponse,
                 "AI",
@@ -40,9 +43,21 @@ public class GeminiChatService implements ChatService {
 
     private GeminiChatService() {
         this.chatRepository = InMemoryChatRepository.getInstance();
-        this.chatProvider = GenAIChatProvider.getInstance();
+        this.geminiProvider = GenAIChatProvider.getInstance();
+        this.groqProvider = GroqChatProvider.getInstance();
     }
 
+    private ChatProvider selectProvider(String model) {
+
+        model = model.toLowerCase();
+
+        if (model.startsWith("gemini")
+                || model.startsWith("gemma")) {
+            return geminiProvider;
+        }
+
+        return groqProvider;
+    }
     private static final GeminiChatService instance = new GeminiChatService();
 
     public static GeminiChatService getInstance() {
