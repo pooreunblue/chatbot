@@ -1,6 +1,6 @@
 package com.example.archat.presentation.controller;
 
-import com.example.archat.application.service.GeminiChatService;
+import com.example.archat.application.service.DefaultChatService;
 import com.example.archat.domain.model.Chat;
 import com.example.archat.domain.service.ChatService;
 import com.example.archat.presentation.dto.ChatResponseDTO;
@@ -22,7 +22,7 @@ public class ChatController extends BaseController {
 
     @Override
     public void init() throws ServletException {
-        chatService = GeminiChatService.getInstance(); // Lazy Loading
+        chatService = DefaultChatService.getInstance(); // Lazy Loading
         // Service, Repository : static 저장해서 관리 <- tomcat이 자원 관리 X
         // Controller(Servlet) : tomcat 관리 - @WebServlet("/chat")
     }

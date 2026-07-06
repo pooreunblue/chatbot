@@ -4,7 +4,7 @@ import com.google.genai.Client;
 import com.google.genai.types.*;
 
 public class GenAIConfig {
-    private static final String GEMINI_API_KEY = System.getenv("GEMINI_API_KEY");
+    private static final String GEMINI_API_KEY = EnvironmentConfig.get("GEMINI_API_KEY");
 
     public static Client getClient() {
         return Client.builder()

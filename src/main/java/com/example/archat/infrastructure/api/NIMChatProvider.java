@@ -14,10 +14,10 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 
-public class GroqChatProvider implements ChatProvider {
+public class NIMChatProvider implements ChatProvider {
 
     private static final URI DEFAULT_ENDPOINT =
-            URI.create("https://api.groq.com/openai/v1/chat/completions");
+            URI.create("https://integrate.api.nvidia.com/v1/chat/completions");
     private static final Gson GSON = new Gson();
     private static final String SYSTEM_PROMPT = """
         친절한 말투로, 100자 이내로, 가능한 한글로 답변하세요.
@@ -50,21 +50,21 @@ public class GroqChatProvider implements ChatProvider {
         messages.add(SYSTEM_MESSAGE);
         messages.addAll(
                 chatHistory.stream()
-                        .map(GroqChatProvider::toMessage)
+                        .map(NIMChatProvider::toMessage)
                         .toList()
         );
         return requestCompletion(newChat.model(), messages);
     }
 
-    private GroqChatProvider() {
+    private NIMChatProvider() {
         this(HttpClient.newBuilder()
                         .connectTimeout(Duration.ofSeconds(10))
                         .build(),
                 DEFAULT_ENDPOINT,
-                EnvironmentConfig.get("GROQ_API_KEY"));
+                EnvironmentConfig.get("NVIDIA_API_KEY"));
     }
 
-    GroqChatProvider(HttpClient httpClient, URI endpoint, String apiKey) {
+    NIMChatProvider(HttpClient httpClient, URI endpoint, String apiKey) {
         this.httpClient = httpClient;
         this.endpoint = endpoint;
         this.apiKey = apiKey;
@@ -84,7 +84,6 @@ public class GroqChatProvider implements ChatProvider {
             HttpResponse<String> response = httpClient.send(
                     request,
                     HttpResponse.BodyHandlers.ofString());
-
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new IllegalStateException(extractError(response));
             }
@@ -96,12 +95,12 @@ public class GroqChatProvider implements ChatProvider {
                     || completion.choices().isEmpty()
                     || completion.choices().get(0).message() == null
                     || completion.choices().get(0).message().content() == null) {
-                throw new IllegalStateException("Groq API 응답에 메시지가 없습니다.");
+                throw new IllegalStateException("NIM API 응답에 메시지가 없습니다.");
             }
             return completion.choices().get(0).message().content();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return errorMessage("Groq API 요청이 중단되었습니다.");
+            return errorMessage("NIM API 요청이 중단되었습니다.");
         } catch (IOException | RuntimeException e) {
             e.printStackTrace();
             return errorMessage(e.getMessage());
@@ -110,7 +109,7 @@ public class GroqChatProvider implements ChatProvider {
 
     private void validateApiKey() {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("GROQ_API_KEY 환경변수가 설정되지 않았습니다.");
+            throw new IllegalStateException("NVIDIA_API_KEY 환경변수가 설정되지 않았습니다.");
         }
     }
 
@@ -124,22 +123,22 @@ public class GroqChatProvider implements ChatProvider {
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             JsonObject error = root.getAsJsonObject("error");
             if (error != null && error.has("message")) {
-                return "Groq API 오류 (%d): %s"
+                return "NIM API 오류 (%d): %s"
                         .formatted(response.statusCode(), error.get("message").getAsString());
             }
         } catch (RuntimeException ignored) {
             // JSON이 아닌 오류 응답이면 상태 코드만 노출한다.
         }
-        return "Groq API 오류 (HTTP %d)".formatted(response.statusCode());
+        return "NIM API 오류 (HTTP %d)".formatted(response.statusCode());
     }
 
     private static String errorMessage(String message) {
         return "문제가 생겼어요 : %s".formatted(message);
     }
 
-    private static final GroqChatProvider instance = new GroqChatProvider();
+    private static final NIMChatProvider instance = new NIMChatProvider();
 
-    public static GroqChatProvider getInstance() {
+    public static NIMChatProvider getInstance() {
         return instance;
     }
 
