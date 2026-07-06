@@ -10,12 +10,33 @@ import jakarta.servlet.http.HttpSession;
 
 import java.io.IOException;
 
-@WebServlet("/auth/session")
+@WebServlet(urlPatterns = {
+        "/auth/session",
+        "/auth/logout"
+})
 public class AuthController extends BaseController {
     private final SupabaseAuthClient supabaseAuthClient = SupabaseAuthClient.getInstance();
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+
+        String path = req.getServletPath();
+
+        if ("/auth/session".equals(path)) {
+            handleSession(req, resp);
+            return;
+        }
+
+        if ("/auth/logout".equals(path)) {
+            handleLogout(req, resp);
+            return;
+        }
+
+        resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+    }
+
+    /// 로그인 관리
+    private void handleSession(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         String accessToken = req.getParameter("accessToken");
 
         if (accessToken == null || accessToken.isBlank()) {
@@ -35,5 +56,16 @@ public class AuthController extends BaseController {
             e.printStackTrace();
             resp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
         }
+    }
+
+    /// 로그아웃 관리
+    private void handleLogout(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        HttpSession session = req.getSession(false);
+
+        if (session != null) {
+            session.invalidate();
+        }
+
+        resp.sendRedirect(req.getContextPath() + "/"); // 메인 화면으로 이동
     }
 }

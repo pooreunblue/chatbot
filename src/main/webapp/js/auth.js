@@ -17,11 +17,21 @@ const closeSignupModalButton = document.querySelector("#closeSignupModal");
 const loginForm = document.querySelector("#loginForm");
 const signupForm = document.querySelector("#signupForm");
 
+function resetLoginForm() {
+    loginForm.reset();
+}
+
+function resetSignupForm() {
+    signupForm.reset();
+}
+
 openLoginModalButton.addEventListener("click", () => {
+    resetLoginForm();
     loginModal.showModal();
 });
 
 openSignupModalButton.addEventListener("click", () => {
+    resetSignupForm();
     signupModal.showModal();
 });
 
@@ -31,6 +41,14 @@ closeLoginModalButton.addEventListener("click", () => {
 
 closeSignupModalButton.addEventListener("click", () => {
     signupModal.close();
+});
+
+loginModal.addEventListener("close", () => {
+    resetLoginForm();
+});
+
+signupModal.addEventListener("close", () => {
+    resetSignupForm();
 });
 
 // 로그인
