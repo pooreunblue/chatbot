@@ -1,40 +1,102 @@
 package com.example.archat.infrastructure.repository;
 
 import com.example.archat.domain.model.Chat;
+import com.example.archat.domain.model.ChatAttachment;
+import com.example.archat.domain.model.ConversationSummary;
 import com.example.archat.domain.repository.ChatRepository;
 
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
-// 1. ChatRepository로 업캐스팅 -> 의존성 주입
-// 2. ChatRepository의 구현 책임을 가져간다 (같은 메서드를 갖고 있다
 public class InMemoryChatRepository implements ChatRepository {
+    private static final InMemoryChatRepository instance = new InMemoryChatRepository();
+
+    private final AtomicLong conversationSequence = new AtomicLong(1);
+    private final Map<Long, ConversationSummary> conversations = new ConcurrentHashMap<>();
+    private final Map<Long, List<Chat>> messagesByConversation = new ConcurrentHashMap<>();
+    private final Map<String, List<Long>> conversationsByUser = new ConcurrentHashMap<>();
+
     private InMemoryChatRepository() {
     }
-
-    // 이 클래스가 정의될 때 아예 이 클래스의 인스턴스를 생성해서 static으로 얹힘
-    // -> 모든 스레드의 공유자원 (톰캣이 서버로 호출하는 모든 것에서 공통적으로 쓰게 됨)
-    private static final InMemoryChatRepository instance = new InMemoryChatRepository();
 
     public static InMemoryChatRepository getInstance() {
         return instance;
     }
 
-    private final ConcurrentHashMap<String, List<Chat>> chatMap = new ConcurrentHashMap<>();
-
     @Override
-    public void save(Chat chat) {
-        chatMap.computeIfAbsent( // 특정한 계산을 시킬 건데, 없을 때 해당 계산/대입을 진행
-                chat.userId(),
-                k -> new ArrayList<>()
-        ).add(chat);
+    public Long createConversation(String userId, String title) {
+        long conversationId = conversationSequence.getAndIncrement();
+        ConversationSummary summary = new ConversationSummary(conversationId, title, OffsetDateTime.now().toString());
+        conversations.put(conversationId, summary);
+        conversationsByUser.computeIfAbsent(userId, key -> new ArrayList<>()).add(conversationId);
+        return conversationId;
     }
 
     @Override
-    public List<Chat> findAllByUserId(String userId) {
-        return chatMap.getOrDefault(userId, Collections.emptyList());
+    public void save(Chat chat, List<ChatAttachment> attachments) {
+        messagesByConversation.computeIfAbsent(chat.conversationId(), key -> new ArrayList<>()).add(chat);
+        touchConversation(chat.conversationId());
     }
 
+    @Override
+    public List<Chat> findAllByConversationId(String userId, Long conversationId) {
+        return messagesByConversation.getOrDefault(conversationId, List.of());
+    }
+
+    @Override
+    public List<ConversationSummary> findConversationsByUserId(String userId) {
+        return conversationsByUser.getOrDefault(userId, List.of())
+                .stream()
+                .map(conversations::get)
+                .filter(summary -> summary != null)
+                .sorted(Comparator.comparing(ConversationSummary::updatedAt).reversed())
+                .toList();
+    }
+
+    @Override
+    public Long findLatestConversationId(String userId) {
+        return findConversationsByUserId(userId).stream()
+                .findFirst()
+                .map(ConversationSummary::conversationId)
+                .orElse(null);
+    }
+
+    @Override
+    public void touchConversation(Long conversationId) {
+        ConversationSummary existing = conversations.get(conversationId);
+        if (existing == null) {
+            return;
+        }
+        conversations.put(
+                conversationId,
+                new ConversationSummary(existing.conversationId(), existing.title(), OffsetDateTime.now().toString())
+        );
+    }
+
+    @Override
+    public void updateConversationTitle(String userId, Long conversationId, String title) {
+        ConversationSummary existing = conversations.get(conversationId);
+        if (existing == null) {
+            return;
+        }
+        conversations.put(
+                conversationId,
+                new ConversationSummary(existing.conversationId(), title, OffsetDateTime.now().toString())
+        );
+    }
+
+    @Override
+    public void deleteConversation(String userId, Long conversationId) {
+        conversations.remove(conversationId);
+        messagesByConversation.remove(conversationId);
+        List<Long> userConversations = conversationsByUser.get(userId);
+        if (userConversations != null) {
+            userConversations.remove(conversationId);
+        }
+    }
 }

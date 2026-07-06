@@ -3,12 +3,16 @@ package com.example.archat.presentation.dto;
 import com.example.archat.domain.model.Chat;
 
 public record ChatResponseDTO(
+        Long conversationId,
         String owner,
         String model,
         String message,
         String timestamp
 ) {
-    // getter -> el parser
+    public Long getConversationId() {
+        return conversationId;
+    }
+
     public String getOwner() {
         return owner;
     }
@@ -25,9 +29,9 @@ public record ChatResponseDTO(
         return timestamp;
     }
 
-    // DTO에 변환 로직을 내장 (DTO -> Model(Entity))
-    static public ChatResponseDTO of(Chat chat) {
+    public static ChatResponseDTO of(Chat chat) {
         return new ChatResponseDTO(
+                chat.conversationId(),
                 chat.owner(),
                 chat.model(),
                 chat.message(),
