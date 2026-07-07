@@ -1,21 +1,23 @@
 package com.example.archat.domain.service;
 
 import com.example.archat.domain.model.Chat;
+import com.example.archat.domain.model.ChatAttachment;
+import com.example.archat.domain.model.ConversationSummary;
 
 import java.util.List;
 
 public interface ChatService {
-    // application.service -> impl
+    List<ConversationSummary> findConversationsByUserId(String userId);
 
-    // presentation 용
-    // -> 내부 로직을 보여줄 필요가 X
-    // ai 관련된 내용이 없어도 된다
+    List<Chat> findAllByConversationId(String userId, Long conversationId);
 
-    // sessionId -> userId
-    // 전체 데이터를 불러오기
-    // archat.domain.model.Chat;
-    List<Chat> findAllByUserId(String userId);
+    Long findLatestConversationId(String userId);
 
-    // 저장하기
-    void save(Chat chat);
+    Long createConversation(String userId, String openingMessage);
+
+    void saveUserMessage(Long conversationId, String userId, String message, String model, List<ChatAttachment> attachments);
+
+    void updateConversationTitle(String userId, Long conversationId, String title);
+
+    void deleteConversation(String userId, Long conversationId);
 }

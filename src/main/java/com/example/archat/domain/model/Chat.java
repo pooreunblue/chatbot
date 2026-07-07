@@ -1,12 +1,11 @@
 package com.example.archat.domain.model;
 
 public record Chat(
+        Long conversationId,
         String message,
         String owner,
-//        String userId,
         String userId,
         String model,
         String timestamp
-        // audit -> 감사. 이 데이터가 제대로 된 데이터를 인지를 시간/관계 등으로 검증.
 ) {
 }
