@@ -79,27 +79,33 @@ public class DefaultChatService implements ChatService {
 
     @Override
     public void saveUserMessage(Long conversationId, String userId, String message, String model, List<ChatAttachment> attachments) {
+        boolean hasImageAttachment = attachments != null && attachments.stream().anyMatch(ChatAttachment::isImage);
+        String effectiveModel = hasImageAttachment ? "gemini-3.1-flash-lite" : model;
         Chat userChat = new Chat(
+                null,
                 conversationId,
                 message,
                 "USER",
                 userId,
-                model,
-                OffsetDateTime.now().toString()
+                effectiveModel,
+                OffsetDateTime.now().toString(),
+                attachments
         );
         chatRepository.save(userChat, attachments);
 
         List<Chat> history = chatRepository.findAllByConversationId(userId, conversationId);
-        ChatProvider provider = selectProvider(model);
-        String aiResponse = provider.useAI(userChat, history);
+        ChatProvider provider = selectProvider(effectiveModel);
+        String aiResponse = provider.useAI(userChat, history, attachments);
 
         Chat aiChat = new Chat(
+                null,
                 conversationId,
                 aiResponse,
                 "AI",
                 userId,
-                model,
-                OffsetDateTime.now().toString()
+                effectiveModel,
+                OffsetDateTime.now().toString(),
+                List.of()
         );
         chatRepository.save(aiChat, List.of());
         chatRepository.touchConversation(conversationId);

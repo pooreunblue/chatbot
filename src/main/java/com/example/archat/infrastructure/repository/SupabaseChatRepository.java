@@ -4,19 +4,27 @@ import com.example.archat.domain.model.Chat;
 import com.example.archat.domain.model.ChatAttachment;
 import com.example.archat.domain.model.ConversationSummary;
 import com.example.archat.domain.repository.ChatRepository;
+import com.example.archat.infrastructure.config.EnvironmentSettings;
 import com.example.archat.infrastructure.supabase.SupabaseRestClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class SupabaseChatRepository implements ChatRepository {
     private static final SupabaseChatRepository instance = new SupabaseChatRepository();
 
     private final SupabaseRestClient supabaseRestClient = SupabaseRestClient.getInstance();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final String storageBucket = EnvironmentSettings.getOrDefault("SUPABASE_STORAGE_BUCKET", "chat-attachments");
 
     private SupabaseChatRepository() {
     }
@@ -63,7 +71,7 @@ public class SupabaseChatRepository implements ChatRepository {
             }
 
             long messageId = messageArray.get(0).get("message_id").asLong();
-            if (!attachments.isEmpty()) {
+            if (attachments != null && !attachments.isEmpty()) {
                 List<AttachmentInsertPayload> payloads = attachments.stream()
                         .map(attachment -> new AttachmentInsertPayload(
                                 messageId,
@@ -94,21 +102,46 @@ public class SupabaseChatRepository implements ChatRepository {
                 return List.of();
             }
 
-            String response = supabaseRestClient.get(
+            String messageResponse = supabaseRestClient.get(
                     "messages?conversation_id=eq." + conversationId
-                            + "&select=conversation_id,content,role,model_name,created_at"
+                            + "&select=message_id,conversation_id,content,role,model_name,created_at"
                             + "&order=created_at.asc,message_id.asc"
             );
-            JsonNode jsonArray = objectMapper.readTree(response);
+            JsonNode messageArray = objectMapper.readTree(messageResponse);
+
+            String attachmentResponse = supabaseRestClient.get(
+                    "attachments?conversation_id=eq." + conversationId
+                            + "&select=attachment_id,message_id,file_name,file_path,mime_type,file_size"
+                            + "&order=created_at.asc,attachment_id.asc"
+            );
+            JsonNode attachmentArray = objectMapper.readTree(attachmentResponse);
+
+            Map<Long, List<ChatAttachment>> attachmentsByMessageId = new LinkedHashMap<>();
+            for (JsonNode node : attachmentArray) {
+                long messageId = node.path("message_id").asLong();
+                attachmentsByMessageId.computeIfAbsent(messageId, key -> new ArrayList<>())
+                        .add(new ChatAttachment(
+                                node.path("attachment_id").asLong(),
+                                node.path("file_name").asText(""),
+                                node.path("file_path").asText(""),
+                                node.path("mime_type").asText(""),
+                                node.path("file_size").asLong(0L),
+                                isImageMimeType(node.path("mime_type").asText(""))
+                        ));
+            }
+
             List<Chat> chats = new ArrayList<>();
-            for (JsonNode node : jsonArray) {
+            for (JsonNode node : messageArray) {
+                long messageId = node.path("message_id").asLong();
                 chats.add(new Chat(
-                        node.get("conversation_id").asLong(),
+                        messageId,
+                        node.path("conversation_id").asLong(),
                         node.path("content").asText(""),
                         toOwner(node.path("role").asText("assistant")),
                         userId,
                         node.path("model_name").asText(""),
-                        node.path("created_at").asText("")
+                        node.path("created_at").asText(""),
+                        attachmentsByMessageId.getOrDefault(messageId, List.of())
                 ));
             }
             return chats;
@@ -189,6 +222,49 @@ public class SupabaseChatRepository implements ChatRepository {
         } catch (Exception e) {
             throw new IllegalStateException("Failed to delete conversation: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public ChatAttachment storeAttachment(String userId, Long conversationId, String originalFileName, String mimeType, byte[] fileBytes) {
+        try {
+            String safeFileName = sanitizeFileName(originalFileName);
+            String storagePath = "users/%s/conversations/%d/%s-%s".formatted(
+                    userId,
+                    conversationId,
+                    UUID.nameUUIDFromBytes((safeFileName + System.nanoTime()).getBytes()),
+                    safeFileName
+            );
+
+            supabaseRestClient.uploadBinary(
+                    "/storage/v1/object/" + storageBucket + "/" + supabaseRestClient.encodePath(storagePath),
+                    fileBytes,
+                    mimeType == null || mimeType.isBlank() ? "application/octet-stream" : mimeType
+            );
+
+            String publicUrl = supabaseRestClient.getPublicStorageUrl(storageBucket, storagePath);
+            return new ChatAttachment(
+                    null,
+                    safeFileName,
+                    publicUrl,
+                    mimeType,
+                    fileBytes.length,
+                    isImageMimeType(mimeType)
+            );
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to store attachment in Supabase Storage: " + e.getMessage(), e);
+        }
+    }
+
+    private String sanitizeFileName(String fileName) {
+        String normalized = fileName == null ? "attachment" : fileName.trim();
+        if (normalized.isBlank()) {
+            return "attachment";
+        }
+        return Path.of(normalized).getFileName().toString();
+    }
+
+    private boolean isImageMimeType(String mimeType) {
+        return mimeType != null && mimeType.toLowerCase().startsWith("image/");
     }
 
     private String toDatabaseRole(String owner) {

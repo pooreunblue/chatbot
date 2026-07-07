@@ -25,54 +25,18 @@
         .message-body { border:1px solid var(--line); border-radius:20px; padding:16px 18px; line-height:1.7; white-space:pre-wrap; word-break:break-word; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.03); } .message.user .message-body { background:#111; color:#fff; border-color:#111; }
         .composer-wrap { padding:18px 24px 24px; border-top:1px solid var(--line); background:#fff; } .composer { max-width:860px; margin:0 auto; } .composer-form { border:1px solid var(--line-strong); border-radius:24px; background:#fff; box-shadow:0 10px 30px rgba(0,0,0,.04); overflow:hidden; }
         .composer-main { padding:16px 18px 12px; } .composer-main textarea { width:100%; min-height:92px; resize:vertical; border:0; outline:none; font:inherit; color:var(--text); background:transparent; }
-        .attachments { display:flex; flex-wrap:wrap; gap:8px; padding:0 18px 14px; } .attachments:empty { display:none; } .attachment-chip { display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:12px; background:#f4f4f6; border:1px solid #e6e6ea; font-size:.82rem; color:#3d3d42; }
+        .attachments { display:flex; flex-wrap:wrap; gap:8px; padding:0 18px 14px; } .attachments:empty { display:none; } .attachment-chip { display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:12px; background:#f4f4f6; border:1px solid #e6e6ea; font-size:.82rem; color:#3d3d42; max-width:100%; } .attachment-thumb { width:42px; height:42px; object-fit:cover; border-radius:10px; flex:0 0 auto; }
+        .message-attachments { display:flex; flex-direction:column; gap:10px; margin-top:14px; } .message-image-link,.message-file { display:block; text-decoration:none; } .message-image { display:block; max-width:100%; width:auto; max-height:360px; border-radius:16px; border:1px solid var(--line); object-fit:contain; background:#fff; } .message-file { padding:12px 14px; border:1px solid var(--line); border-radius:14px; color:inherit; background:#fafafa; }
         .composer-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:14px 18px 18px; border-top:1px solid var(--line); background:var(--panel-soft); } .composer-left,.composer-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
         .attach-button,.composer-bar select,.send-button { border-radius:999px; font:inherit; } .attach-button { display:inline-flex; align-items:center; gap:8px; padding:10px 12px; border:1px solid var(--line); background:#fff; cursor:pointer; color:var(--text); } .attach-button input { display:none; } .composer-bar select { border:1px solid var(--line); background:#fff; color:var(--text); padding:10px 12px; } .send-button { border:0; background:#111; color:#fff; padding:11px 16px; font-weight:600; cursor:pointer; } .helper-text { font-size:.8rem; color:var(--muted); }
         @media (max-width:920px) { .app { grid-template-columns:1fr; } .sidebar { border-right:0; border-bottom:1px solid var(--line); } .header { padding:16px; } .message,.composer-wrap { padding-left:16px; padding-right:16px; } }
     </style>
 </head>
 <body>
-<header>
-    <h1>Archat</h1>
-    <form id="logoutForm" action="<c:url value="/auth/logout"/>" method="post">
-        <button type="submit">로그아웃</button>
-    </form>
-</header>
-
-<form action="<c:url value="/chat"/>" method="post">
-    <input name="message" placeholder="메시지를 입력하세요"/>
-    <select name="model">
-        <optgroup label="Google AI">
-            <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it</option>
-            <option value="gemma-4-31b-it">gemma-4-31b-it</option>
-            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
-        </optgroup>
-        <optgroup label="Groq - Production">
-            <option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option>
-            <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
-            <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-            <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
-            <option value="groq/compound-mini">groq/compound-mini</option>
-            <option value="groq/compound">groq/compound</option>
-        </optgroup>
-        <optgroup label="Groq - Preview">
-            <option value="qwen/qwen3-32b">qwen/qwen3-32b</option>
-        </optgroup>
-        <optgroup label="NVIDIA NIM">
-            <option value="nvidia/nemotron-3-ultra-550b-a55b">
-                Nemotron 3 Ultra
-            </option>
-
-            <option value="deepseek-ai/deepseek-v4-pro">
-                DeepSeek V4 Pro
-            </option>
-        </optgroup>
-    </select>
-    <button>전송</button>
-</form>
-<section>
-    <c:if test="${empty chats}">
-        <p>아직 채팅이 없습니다</p>
+<c:set var="activeTitle" value="New chat" />
+<c:forEach var="conversation" items="${conversations}">
+    <c:if test="${conversation.conversationId eq activeConversationId}">
+        <c:set var="activeTitle" value="${conversation.title}" />
     </c:if>
 </c:forEach>
 <div class="app">
@@ -118,8 +82,118 @@
                 </c:otherwise>
             </c:choose>
         </div>
-    </c:forEach>
-</section>
-<script type="module" src="${pageContext.request.contextPath}/js/logout.js?v=1"></script>
+    </aside>
+    <main class="main">
+        <header class="header">
+            <div class="header-title"><h1>${activeTitle}</h1><p>Conversation list and message history stay separated.</p></div>
+            <div class="header-badge">Supabase conversations</div>
+        </header>
+        <section class="messages" id="messages">
+            <c:choose>
+                <c:when test="${empty chats}">
+                    <div class="empty"><h2>What can I help with?</h2><p>This screen is wired for conversation-based storage. Send a first message to create a new chat and show it in the left sidebar.</p></div>
+                </c:when>
+                <c:otherwise>
+                    <c:forEach var="chat" items="${chats}">
+                        <article class="message ${chat.owner eq 'USER' ? 'user' : 'assistant'}">
+                            <div class="message-meta"><strong>${chat.owner eq 'USER' ? 'You' : 'ArChat'}</strong><span>${chat.model} | ${chat.timestamp}</span></div>
+                            <div class="message-body">${chat.message}</div>
+                            <c:if test="${not empty chat.attachments}">
+                                <div class="message-attachments">
+                                    <c:forEach var="attachment" items="${chat.attachments}">
+                                        <c:choose>
+                                            <c:when test="${attachment.image}">
+                                                <a class="message-image-link" href="${attachment.filePath}" target="_blank" rel="noopener">
+                                                    <img class="message-image" src="${attachment.filePath}" alt="${attachment.fileName}">
+                                                </a>
+                                            </c:when>
+                                            <c:otherwise>
+                                                <a class="message-file" href="${attachment.filePath}" target="_blank" rel="noopener">
+                                                    <span>${attachment.fileName}</span>
+                                                </a>
+                                            </c:otherwise>
+                                        </c:choose>
+                                    </c:forEach>
+                                </div>
+                            </c:if>
+                        </article>
+                    </c:forEach>
+                </c:otherwise>
+            </c:choose>
+        </section>
+        <div class="composer-wrap">
+            <div class="composer">
+                <form class="composer-form" action="<c:url value='/chat'/>" method="post" enctype="multipart/form-data">
+                    <input type="hidden" name="conversationId" value="${activeConversationId}">
+                    <div class="composer-main"><textarea id="message" name="message" placeholder="Type your message" required></textarea></div>
+                    <div class="attachments" id="attachmentPreview"></div>
+                    <div class="composer-bar">
+                        <div class="composer-left">
+                            <label class="attach-button" for="attachmentInput"><span>+</span><span>Add files</span><input id="attachmentInput" type="file" name="attachments" multiple accept="image/*,.pdf,.txt,.doc,.docx,.ppt,.pptx,.xls,.xlsx"></label>
+                            <span class="helper-text">Images show preview before sending and appear inline after upload.</span>
+                        </div>
+                        <div class="composer-right">
+                            <select name="model">
+                                <optgroup label="Google AI"><option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it</option><option value="gemma-4-31b-it">gemma-4-31b-it</option><option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option></optgroup>
+                                <optgroup label="Groq"><option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option><option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option><option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option><option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option><option value="groq/compound-mini">groq/compound-mini</option><option value="groq/compound">groq/compound</option><option value="qwen/qwen3-32b">qwen/qwen3-32b</option></optgroup>
+                                <optgroup label="NVIDIA NIM"><option value="nvidia/nemotron-3-ultra-550b-a55b">nvidia/nemotron-3-ultra-550b-a55b</option><option value="deepseek-ai/deepseek-v4-pro">deepseek-ai/deepseek-v4-pro</option></optgroup>
+                            </select>
+                            <button class="send-button" type="submit">Send</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+</div>
+<script>
+    (function () {
+        const attachmentInput = document.getElementById("attachmentInput");
+        const attachmentPreview = document.getElementById("attachmentPreview");
+        const messages = document.getElementById("messages");
+        let previewUrls = [];
+        function renderFiles(files) {
+            previewUrls.forEach(function (url) {
+                URL.revokeObjectURL(url);
+            });
+            previewUrls = [];
+            attachmentPreview.innerHTML = "";
+            if (!files || files.length === 0) return;
+            Array.from(files).forEach(function (file) {
+                const chip = document.createElement("div");
+                chip.className = "attachment-chip";
+                if (file.type && file.type.indexOf("image/") === 0) {
+                    const url = URL.createObjectURL(file);
+                    previewUrls.push(url);
+                    const img = document.createElement("img");
+                    img.className = "attachment-thumb";
+                    img.src = url;
+                    img.alt = file.name;
+                    chip.appendChild(img);
+                }
+                const label = document.createElement("span");
+                label.textContent = file.name;
+                chip.appendChild(label);
+                attachmentPreview.appendChild(chip);
+            });
+        }
+        attachmentInput.addEventListener("change", function (event) { renderFiles(event.target.files); });
+        document.querySelectorAll("[data-rename-target]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                const form = document.getElementById(button.dataset.renameTarget);
+                form.classList.toggle("active");
+                const input = form.querySelector("input[name='title']");
+                if (form.classList.contains("active")) { input.focus(); input.select(); }
+            });
+        });
+        document.querySelectorAll("[data-close-rename]").forEach(function (button) {
+            button.addEventListener("click", function () {
+                const form = document.getElementById(button.dataset.closeRename);
+                form.classList.remove("active");
+            });
+        });
+        messages.scrollTop = messages.scrollHeight;
+    })();
+</script>
 </body>
 </html>

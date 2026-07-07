@@ -2,16 +2,18 @@ package com.example.archat.infrastructure.api;
 
 import com.example.archat.application.port.ChatProvider;
 import com.example.archat.domain.model.Chat;
+import com.example.archat.domain.model.ChatAttachment;
 import com.google.genai.Client;
 import com.google.genai.types.Content;
+import com.google.genai.types.FileData;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class GenAIChatProvider implements ChatProvider {
 
-    // 단일 챗
     @Override
     public String useAI(Chat chat) {
         try (Client client = GenAIConfig.getClient()) {
@@ -26,18 +28,40 @@ public class GenAIChatProvider implements ChatProvider {
         }
     }
 
-    // 히스토리 포함
     @Override
     public String useAI(Chat newChat, List<Chat> chatHistory) {
-//        System.out.println("chatHistory = " + chatHistory);
-        List<Content> contents = chatHistory.stream()
-                .map((c) -> Content.builder()
-//                        .role(newChat.owner().equals("USER") ? "user" : "model")
-                        .role(c.owner().equals("USER") ? "user" : "model")
-                        .parts(Part.builder().text(c.message()).build())
-                        .build())
-                .toList();
-//        System.out.println("contents = " + contents);
+        return useAI(newChat, chatHistory, List.of());
+    }
+
+    @Override
+    public String useAI(Chat newChat, List<Chat> chatHistory, List<ChatAttachment> attachments) {
+        List<Content> contents = new ArrayList<>();
+        for (Chat chat : chatHistory) {
+            contents.add(Content.builder()
+                    .role("USER".equalsIgnoreCase(chat.owner()) ? "user" : "model")
+                    .parts(Part.builder().text(chat.message()).build())
+                    .build());
+        }
+
+        List<Part> currentParts = new ArrayList<>();
+        currentParts.add(Part.builder().text(newChat.message()).build());
+        for (ChatAttachment attachment : attachments == null ? List.<ChatAttachment>of() : attachments) {
+            if (attachment.isImage() && attachment.getFilePath() != null && !attachment.getFilePath().isBlank()) {
+                currentParts.add(
+                        Part.builder()
+                                .fileData(FileData.builder()
+                                        .mimeType(attachment.getMimeType())
+                                        .fileUri(attachment.getFilePath())
+                                        .build())
+                                .build()
+                );
+            }
+        }
+        contents.add(Content.builder()
+                .role("user")
+                .parts(currentParts)
+                .build());
+
         try (Client client = GenAIConfig.getClient()) {
             GenerateContentResponse response = client.models.generateContent(
                     newChat.model(),
