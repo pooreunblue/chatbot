@@ -3,6 +3,9 @@ package com.example.archat.presentation.dto;
 import com.example.archat.domain.model.Chat;
 import com.example.archat.domain.model.ChatAttachment;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 public record ChatResponseDTO(
@@ -14,6 +17,9 @@ public record ChatResponseDTO(
         String timestamp,
         List<ChatAttachment> attachments
 ) {
+    private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter KOREA_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
     public Long getMessageId() {
         return messageId;
     }
@@ -35,7 +41,7 @@ public record ChatResponseDTO(
     }
 
     public String getTimestamp() {
-        return timestamp;
+        return formatToKoreaTime(timestamp);
     }
 
     public List<ChatAttachment> getAttachments() {
@@ -52,5 +58,18 @@ public record ChatResponseDTO(
                 chat.timestamp(),
                 chat.attachments()
         );
+    }
+
+    private static String formatToKoreaTime(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            return OffsetDateTime.parse(value)
+                    .atZoneSameInstant(KOREA_ZONE)
+                    .format(KOREA_FORMATTER);
+        } catch (Exception e) {
+            return value;
+        }
     }
 }
