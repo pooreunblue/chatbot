@@ -2,6 +2,7 @@ package com.example.archat.presentation.controller;
 
 import com.example.archat.domain.model.AuthUser;
 import com.example.archat.infrastructure.auth.SupabaseAuthClient;
+import com.example.archat.infrastructure.repository.SupabaseUserRepository;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,7 @@ import java.io.IOException;
 })
 public class AuthController extends BaseController {
     private final SupabaseAuthClient supabaseAuthClient = SupabaseAuthClient.getInstance();
+    private final SupabaseUserRepository supabaseUserRepository = SupabaseUserRepository.getInstance();
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -46,15 +48,17 @@ public class AuthController extends BaseController {
 
         try {
             AuthUser user = supabaseAuthClient.getUser(accessToken);
+            String appUserId = supabaseUserRepository.ensureUserId(user.email());
 
             HttpSession session = req.getSession();
-            session.setAttribute("loginUserId", user.id());
+            session.setAttribute("loginUserId", appUserId);
             session.setAttribute("loginEmail", user.email());
+            session.setAttribute("loginAuthUserId", user.id());
 
             resp.setStatus(HttpServletResponse.SC_NO_CONTENT);
         } catch (Exception e) {
             e.printStackTrace();
-            resp.sendError(HttpServletResponse.SC_UNAUTHORIZED);
+            resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, e.getMessage());
         }
     }
 

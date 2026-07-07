@@ -1,92 +1,164 @@
 package com.example.archat.presentation.controller;
 
 import com.example.archat.application.service.DefaultChatService;
-import com.example.archat.domain.model.Chat;
+import com.example.archat.domain.model.ChatAttachment;
 import com.example.archat.domain.service.ChatService;
 import com.example.archat.presentation.dto.ChatResponseDTO;
+import com.example.archat.presentation.dto.ConversationSummaryDTO;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.MultipartConfig;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.Part;
 
 import java.io.IOException;
-import java.time.ZonedDateTime;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.UUID;
 
 @WebServlet("/chat")
+@MultipartConfig
 public class ChatController extends BaseController {
-    //    private GeminiChatService chatService;
     private ChatService chatService;
-    // init
 
     @Override
     public void init() throws ServletException {
-        chatService = DefaultChatService.getInstance(); // Lazy Loading
-        // Service, Repository : static 저장해서 관리 <- tomcat이 자원 관리 X
-        // Controller(Servlet) : tomcat 관리 - @WebServlet("/chat")
+        chatService = DefaultChatService.getInstance();
     }
-
-    // get
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-
-        /// 로그인 진행하지 않는다면 무조건 index page로 돌아감
         String loginUserId = getLoginUserId(req);
-
         if (loginUserId == null) {
             resp.sendRedirect(req.getContextPath() + "/");
             return;
         }
 
-        List<ChatResponseDTO> response = chatService.findAllByUserId(loginUserId)
+        Long requestedConversationId = parseConversationId(req.getParameter("conversationId"));
+        Long activeConversationId = requestedConversationId != null
+                ? requestedConversationId
+                : chatService.findLatestConversationId(loginUserId);
+
+        List<ConversationSummaryDTO> conversations = chatService.findConversationsByUserId(loginUserId)
+                .stream()
+                .map(ConversationSummaryDTO::of)
+                .toList();
+
+        List<ChatResponseDTO> chats = chatService.findAllByConversationId(loginUserId, activeConversationId)
                 .stream()
                 .map(ChatResponseDTO::of)
                 .toList();
 
-        // 세션 자체가 가지고 있는 id를 사용해서 인메모리 DB에서의 데이터를 구분
-        req.setAttribute("chats",
-                response);
-
-        // 주소를 유지한채 jsp 포워딩 + 보안 + 가상 경로
-        // webapp/WEB-INF/views/chat.jsp
-        req.getRequestDispatcher("%s/%s".formatted(VIEW_PREFIX, "chat.jsp"))
-                .forward(req, resp);
+        req.setAttribute("conversations", conversations);
+        req.setAttribute("chats", chats);
+        req.setAttribute("activeConversationId", activeConversationId);
+        req.getRequestDispatcher("%s/%s".formatted(VIEW_PREFIX, "chat.jsp")).forward(req, resp);
     }
-
-    // post
 
     @Override
     protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-
         String loginUserId = getLoginUserId(req);
-
         if (loginUserId == null) {
             resp.sendRedirect(req.getContextPath() + "/");
             return;
         }
 
-        Chat chat = new Chat(
-                req.getParameter("message"),
-                "USER",
-                loginUserId,
-                req.getParameter("model"),
-                ZonedDateTime.now().toString()
-        );
+        String action = req.getParameter("action");
+        if (action != null && !action.isBlank()) {
+            handleConversationAction(req, resp, loginUserId, action);
+            return;
+        }
 
-        chatService.save(chat);
-        resp.sendRedirect("%s/%s".formatted(req.getContextPath(), "chat"));
+        String message = req.getParameter("message");
+        String model = req.getParameter("model");
+        Long conversationId = parseConversationId(req.getParameter("conversationId"));
+
+        if (message == null || message.isBlank()) {
+            resp.sendRedirect(req.getContextPath() + "/chat");
+            return;
+        }
+
+        if (conversationId == null) {
+            conversationId = chatService.createConversation(loginUserId, message);
+        }
+        final Long activeConversationId = conversationId;
+
+        List<ChatAttachment> attachments = req.getParts().stream()
+                .filter(part -> "attachments".equals(part.getName()) && part.getSize() > 0)
+                .map(part -> saveAttachment(loginUserId, activeConversationId, part))
+                .toList();
+
+        chatService.saveUserMessage(activeConversationId, loginUserId, message, model, attachments);
+        resp.sendRedirect("%s/chat?conversationId=%d".formatted(req.getContextPath(), activeConversationId));
     }
 
-    /// 사용자 ID 획득
+    private void handleConversationAction(HttpServletRequest req, HttpServletResponse resp, String loginUserId, String action) throws IOException {
+        Long conversationId = parseConversationId(req.getParameter("conversationId"));
+
+        switch (action) {
+            case "create" -> {
+                Long newConversationId = chatService.createConversation(loginUserId, "New chat");
+                resp.sendRedirect("%s/chat?conversationId=%d".formatted(req.getContextPath(), newConversationId));
+            }
+            case "rename" -> {
+                if (conversationId != null) {
+                    chatService.updateConversationTitle(loginUserId, conversationId, req.getParameter("title"));
+                }
+                resp.sendRedirect("%s/chat?conversationId=%d".formatted(req.getContextPath(), conversationId));
+            }
+            case "delete" -> {
+                if (conversationId != null) {
+                    chatService.deleteConversation(loginUserId, conversationId);
+                }
+                Long latestConversationId = chatService.findLatestConversationId(loginUserId);
+                if (latestConversationId == null) {
+                    resp.sendRedirect(req.getContextPath() + "/chat");
+                } else {
+                    resp.sendRedirect("%s/chat?conversationId=%d".formatted(req.getContextPath(), latestConversationId));
+                }
+            }
+            default -> resp.sendRedirect(req.getContextPath() + "/chat");
+        }
+    }
+
+    private ChatAttachment saveAttachment(String userId, Long conversationId, Part part) {
+        String submittedFileName = part.getSubmittedFileName() == null ? "attachment" : part.getSubmittedFileName();
+        String originalName = Path.of(submittedFileName).getFileName().toString();
+        Path uploadDirectory = Path.of(System.getProperty("java.io.tmpdir"), "archat-uploads", userId, String.valueOf(conversationId));
+
+        try {
+            Files.createDirectories(uploadDirectory);
+            Path target = uploadDirectory.resolve(UUID.randomUUID() + "-" + originalName);
+            try (InputStream inputStream = part.getInputStream()) {
+                Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return new ChatAttachment(originalName, target.toString(), part.getContentType(), part.getSize());
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to store uploaded attachment", e);
+        }
+    }
+
+    private Long parseConversationId(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
     private String getLoginUserId(HttpServletRequest req) {
         HttpSession session = req.getSession(false);
-
         if (session == null) {
             return null;
         }
-
         return (String) session.getAttribute("loginUserId");
     }
 }
