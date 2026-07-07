@@ -2,6 +2,7 @@ package com.example.archat.presentation.controller;
 
 import com.example.archat.application.service.DefaultChatService;
 import com.example.archat.domain.model.ChatAttachment;
+import com.example.archat.infrastructure.repository.SupabaseChatRepository;
 import com.example.archat.domain.service.ChatService;
 import com.example.archat.presentation.dto.ChatResponseDTO;
 import com.example.archat.presentation.dto.ConversationSummaryDTO;
@@ -14,21 +15,20 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.Part;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
-import java.util.UUID;
 
 @WebServlet("/chat")
 @MultipartConfig
 public class ChatController extends BaseController {
     private ChatService chatService;
+    private SupabaseChatRepository supabaseChatRepository;
 
     @Override
     public void init() throws ServletException {
         chatService = DefaultChatService.getInstance();
+        supabaseChatRepository = SupabaseChatRepository.getInstance();
     }
 
     @Override
@@ -128,16 +128,20 @@ public class ChatController extends BaseController {
 
     private ChatAttachment saveAttachment(String userId, Long conversationId, Part part) {
         String submittedFileName = part.getSubmittedFileName() == null ? "attachment" : part.getSubmittedFileName();
-        String originalName = Path.of(submittedFileName).getFileName().toString();
-        Path uploadDirectory = Path.of(System.getProperty("java.io.tmpdir"), "archat-uploads", userId, String.valueOf(conversationId));
+        String originalName = submittedFileName.contains("\\")
+                ? submittedFileName.substring(submittedFileName.lastIndexOf('\\') + 1)
+                : submittedFileName;
 
-        try {
-            Files.createDirectories(uploadDirectory);
-            Path target = uploadDirectory.resolve(UUID.randomUUID() + "-" + originalName);
-            try (InputStream inputStream = part.getInputStream()) {
-                Files.copy(inputStream, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-            return new ChatAttachment(originalName, target.toString(), part.getContentType(), part.getSize());
+        try (InputStream inputStream = part.getInputStream();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            inputStream.transferTo(outputStream);
+            return supabaseChatRepository.storeAttachment(
+                    userId,
+                    conversationId,
+                    originalName,
+                    part.getContentType(),
+                    outputStream.toByteArray()
+            );
         } catch (IOException e) {
             throw new IllegalStateException("Failed to store uploaded attachment", e);
         }

@@ -44,6 +44,18 @@ public class InMemoryChatRepository implements ChatRepository {
     }
 
     @Override
+    public ChatAttachment storeAttachment(String userId, Long conversationId, String originalFileName, String mimeType, byte[] fileBytes) {
+        return new ChatAttachment(
+                null,
+                originalFileName,
+                "memory://" + conversationId + "/" + originalFileName,
+                mimeType,
+                fileBytes == null ? 0L : fileBytes.length,
+                mimeType != null && mimeType.toLowerCase().startsWith("image/")
+        );
+    }
+
+    @Override
     public List<Chat> findAllByConversationId(String userId, Long conversationId) {
         return messagesByConversation.getOrDefault(conversationId, List.of());
     }

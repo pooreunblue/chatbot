@@ -2,6 +2,7 @@ package com.example.archat.infrastructure.api;
 
 import com.example.archat.application.port.ChatProvider;
 import com.example.archat.domain.model.Chat;
+import com.example.archat.domain.model.ChatAttachment;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -20,12 +21,7 @@ public class GroqChatProvider implements ChatProvider {
             URI.create("https://api.groq.com/openai/v1/chat/completions");
     private static final Gson GSON = new Gson();
     private static final String SYSTEM_PROMPT = """
-        친절한 말투로, 100자 이내로, 가능한 한글로 답변하세요.
-
-        절대로 추론 과정(thinking process, reasoning, chain of thought)을
-        출력하지 마세요.
-
-        오직 최종 답변만 출력하세요.
+        �̵�, ��� ������ ������� ���� �����ϰ� �亯�ϼ���.
         """;
 
     private static final Message SYSTEM_MESSAGE =
@@ -54,6 +50,11 @@ public class GroqChatProvider implements ChatProvider {
                         .toList()
         );
         return requestCompletion(newChat.model(), messages);
+    }
+
+    @Override
+    public String useAI(Chat newChat, List<Chat> chatHistory, List<ChatAttachment> attachments) {
+        return useAI(newChat, chatHistory);
     }
 
     private GroqChatProvider() {
@@ -96,12 +97,12 @@ public class GroqChatProvider implements ChatProvider {
                     || completion.choices().isEmpty()
                     || completion.choices().get(0).message() == null
                     || completion.choices().get(0).message().content() == null) {
-                throw new IllegalStateException("Groq API 응답에 메시지가 없습니다.");
+                throw new IllegalStateException("Groq API ���信 �޽����� �����ϴ�.");
             }
             return completion.choices().get(0).message().content();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return errorMessage("Groq API 요청이 중단되었습니다.");
+            return errorMessage("Groq API ��û�� �ߴܵǾ����ϴ�.");
         } catch (IOException | RuntimeException e) {
             e.printStackTrace();
             return errorMessage(e.getMessage());
@@ -110,7 +111,7 @@ public class GroqChatProvider implements ChatProvider {
 
     private void validateApiKey() {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("GROQ_API_KEY 환경변수가 설정되지 않았습니다.");
+            throw new IllegalStateException("GROQ_API_KEY ȯ�溯���� �����Ǿ� ���� �ʽ��ϴ�.");
         }
     }
 
@@ -124,17 +125,16 @@ public class GroqChatProvider implements ChatProvider {
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             JsonObject error = root.getAsJsonObject("error");
             if (error != null && error.has("message")) {
-                return "Groq API 오류 (%d): %s"
+                return "Groq API ���� (%d): %s"
                         .formatted(response.statusCode(), error.get("message").getAsString());
             }
         } catch (RuntimeException ignored) {
-            // JSON이 아닌 오류 응답이면 상태 코드만 노출한다.
         }
-        return "Groq API 오류 (HTTP %d)".formatted(response.statusCode());
+        return "Groq API ���� (HTTP %d)".formatted(response.statusCode());
     }
 
     private static String errorMessage(String message) {
-        return "문제가 생겼어요 : %s".formatted(message);
+        return "������ ������ : %s".formatted(message);
     }
 
     private static final GroqChatProvider instance = new GroqChatProvider();

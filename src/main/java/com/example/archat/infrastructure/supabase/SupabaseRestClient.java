@@ -52,8 +52,39 @@ public class SupabaseRestClient {
         return send("DELETE", pathWithQuery, null, false);
     }
 
+    public String uploadBinary(String path, byte[] body, String contentType) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(supabaseUrl + path))
+                    .header("apikey", supabaseKey)
+                    .header("Authorization", "Bearer " + supabaseKey)
+                    .header("Content-Type", contentType)
+                    .method("POST", HttpRequest.BodyPublishers.ofByteArray(body))
+                    .build();
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("Supabase binary upload failed (%d): %s"
+                        .formatted(response.statusCode(), response.body()));
+            }
+            return response.body();
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to upload binary to Supabase", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Failed to upload binary to Supabase", e);
+        }
+    }
+
     public String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
+    }
+
+    public String encodePath(String value) {
+        return value == null ? "" : value.replace(" ", "%20");
+    }
+
+    public String getPublicStorageUrl(String bucket, String objectPath) {
+        return supabaseUrl + "/storage/v1/object/public/" + bucket + "/" + encodePath(objectPath);
     }
 
     public String query(Map<String, String> params) {

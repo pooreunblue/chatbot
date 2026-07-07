@@ -11,6 +11,8 @@ public interface ChatRepository {
 
     void save(Chat chat, List<ChatAttachment> attachments);
 
+    ChatAttachment storeAttachment(String userId, Long conversationId, String originalFileName, String mimeType, byte[] fileBytes);
+
     List<Chat> findAllByConversationId(String userId, Long conversationId);
 
     List<ConversationSummary> findConversationsByUserId(String userId);
