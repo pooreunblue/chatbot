@@ -156,11 +156,13 @@ signupForm.addEventListener("submit", async (event) => {
     });
 
     if (error) {
+        signupMessage.classList.remove("success");
         showMessage(signupMessage, getSignupErrorMessage(error));
         return;
     }
 
     console.log("회원가입 성공:", data);
+    signupMessage.classList.add("success");
     showMessage(signupMessage, "회원가입이 완료되었습니다. 로그인을 해주세요.");
     signupForm.reset();
 });

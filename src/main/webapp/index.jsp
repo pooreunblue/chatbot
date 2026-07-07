@@ -8,8 +8,12 @@
 <body>
 <main class="auth-page">
     <section class="auth-card">
-        <h1>ArChat</h1>
-        <p>AI 모델을 선택해 대화할 수 있는 간단한 웹 챗봇입니다.</p>
+        <div class="auth-brand">
+            <div class="auth-brand-mark">AR</div>
+            <h1>ArChat</h1>
+        </div>
+
+        <p>로그인 후 AI 모델을 선택하고 대화를 시작할 수 있습니다.</p>
 
         <div class="auth-actions">
             <button id="openLoginModal" type="button">로그인</button>
@@ -35,7 +39,7 @@
         </div>
 
         <div class="dialog-actions">
-            <button type="button" id="closeLoginModal">닫기</button>
+            <button type="button" id="closeLoginModal" class="button-secondary">닫기</button>
             <button type="submit">로그인</button>
         </div>
     </form>
@@ -58,7 +62,7 @@
         </div>
 
         <div class="dialog-actions">
-            <button type="button" id="closeSignupModal">닫기</button>
+            <button type="button" id="closeSignupModal" class="button-secondary">닫기</button>
             <button type="submit">회원가입</button>
         </div>
     </form>
