@@ -21,8 +21,10 @@
         .main { display:grid; grid-template-rows:auto 1fr auto; min-width:0; } .header { min-height:64px; padding:16px 24px; border-bottom:1px solid var(--line); background:rgba(255,255,255,.92); display:flex; align-items:center; justify-content:space-between; gap:12px; }
         .header-title h1 { margin:0; font-size:1rem; font-weight:600; } .header-title p { margin:4px 0 0; font-size:.82rem; color:var(--muted); } .header-badge { padding:8px 10px; border-radius:999px; border:1px solid var(--line); background:#fff; color:var(--muted); font-size:.8rem; white-space:nowrap; }
         .messages { overflow-y:auto; padding:28px 0 36px; } .empty { max-width:720px; margin:80px auto 0; padding:0 24px; text-align:center; } .empty h2 { margin:0; font-size:1.8rem; font-weight:600; } .empty p { margin:12px auto 0; max-width:560px; line-height:1.7; color:var(--muted); }
-        .message { max-width:860px; margin:0 auto; padding:0 24px; } .message + .message { margin-top:24px; } .message-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; font-size:.8rem; color:var(--muted); } .message-meta strong { color:var(--text); font-size:.9rem; }
-        .message-body { border:1px solid var(--line); border-radius:20px; padding:16px 18px; line-height:1.7; white-space:pre-wrap; word-break:break-word; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.03); } .message.user .message-body { background:#111; color:#fff; border-color:#111; }
+        .message { max-width:860px; margin:0 auto; padding:0 24px; display:flex; flex-direction:column; } .message + .message { margin-top:24px; } .message-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; font-size:.8rem; color:var(--muted); } .message-meta strong { color:var(--text); font-size:.9rem; }
+        .message-body { width:fit-content; max-width:min(100%, 760px); border:1px solid var(--line); border-radius:20px; padding:16px 18px; line-height:1.7; white-space:pre-wrap; word-break:break-word; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.03); } .message.user { align-items:flex-end; } .message.user .message-body { background:#111; color:#fff; border-color:#111; } .message.assistant { align-items:flex-start; } .message.assistant .message-body { background:#fff; }
+        .message.user .message-meta { width:fit-content; align-self:flex-end; }
+        .message.assistant .message-meta { width:fit-content; align-self:flex-start; }
         .composer-wrap { padding:18px 24px 24px; border-top:1px solid var(--line); background:#fff; } .composer { max-width:860px; margin:0 auto; } .composer-form { border:1px solid var(--line-strong); border-radius:24px; background:#fff; box-shadow:0 10px 30px rgba(0,0,0,.04); overflow:hidden; }
         .composer-main { padding:16px 18px 12px; } .composer-main textarea { width:100%; min-height:92px; resize:vertical; border:0; outline:none; font:inherit; color:var(--text); background:transparent; }
         .attachments { display:flex; flex-wrap:wrap; gap:8px; padding:0 18px 14px; } .attachments:empty { display:none; } .attachment-chip { display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:12px; background:#f4f4f6; border:1px solid #e6e6ea; font-size:.82rem; color:#3d3d42; max-width:100%; } .attachment-thumb { width:42px; height:42px; object-fit:cover; border-radius:10px; flex:0 0 auto; }
@@ -151,6 +153,9 @@
         const attachmentInput = document.getElementById("attachmentInput");
         const attachmentPreview = document.getElementById("attachmentPreview");
         const messages = document.getElementById("messages");
+        const composerForm = document.querySelector(".composer-form");
+        const messageInput = document.getElementById("message");
+        const sendButton = document.querySelector(".send-button");
         let previewUrls = [];
         function renderFiles(files) {
             previewUrls.forEach(function (url) {
@@ -177,6 +182,32 @@
                 attachmentPreview.appendChild(chip);
             });
         }
+        function appendMessage(role, text, modelLabel) {
+            const article = document.createElement("article");
+            article.className = "message " + (role === "USER" ? "user" : "assistant");
+
+            const meta = document.createElement("div");
+            meta.className = "message-meta";
+
+            const strong = document.createElement("strong");
+            strong.textContent = role === "USER" ? "You" : "ArChat";
+
+            const span = document.createElement("span");
+            span.textContent = modelLabel || (role === "USER" ? "Sending..." : "Thinking...");
+
+            meta.appendChild(strong);
+            meta.appendChild(span);
+
+            const body = document.createElement("div");
+            body.className = "message-body";
+            body.textContent = text;
+
+            article.appendChild(meta);
+            article.appendChild(body);
+            messages.appendChild(article);
+            messages.scrollTop = messages.scrollHeight;
+            return article;
+        }
         attachmentInput.addEventListener("change", function (event) { renderFiles(event.target.files); });
         document.querySelectorAll("[data-rename-target]").forEach(function (button) {
             button.addEventListener("click", function () {
@@ -191,6 +222,46 @@
                 const form = document.getElementById(button.dataset.closeRename);
                 form.classList.remove("active");
             });
+        });
+        composerForm.addEventListener("submit", async function (event) {
+            event.preventDefault();
+
+            const text = messageInput.value;
+            if (!text || !text.trim()) {
+                return;
+            }
+
+            appendMessage("USER", text, "Sending...");
+            appendMessage("AI", "Generating response...", "Thinking...");
+
+            const formData = new FormData(composerForm);
+            sendButton.disabled = true;
+            messageInput.disabled = true;
+
+            try {
+                const response = await fetch(composerForm.action, {
+                    method: "POST",
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error("Failed to send message");
+                }
+
+                window.location.href = response.url || (window.location.pathname + window.location.search);
+            } catch (error) {
+                const pending = messages.querySelector(".message.assistant:last-of-type");
+                if (pending && pending.textContent.indexOf("Generating response...") !== -1) {
+                    pending.remove();
+                }
+                alert("메시지 전송에 실패했습니다.");
+            } finally {
+                sendButton.disabled = false;
+                messageInput.disabled = false;
+                messageInput.value = "";
+                attachmentInput.value = "";
+                attachmentPreview.innerHTML = "";
+            }
         });
         messages.scrollTop = messages.scrollHeight;
     })();
