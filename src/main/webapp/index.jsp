@@ -3,7 +3,8 @@
 <html>
 <head>
     <title>ArChat</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=1">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/common.css?v=1">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/auth.css?v=2">
 </head>
 <body>
 <main class="auth-page">
