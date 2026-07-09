@@ -5,12 +5,71 @@
     const composerForm = document.querySelector(".composer-form");
     const messageInput = document.getElementById("message");
     const sendButton = document.querySelector(".send-button");
+    const scrollTopButton = document.getElementById("scrollTopButton");
+    const scrollBottomButton = document.getElementById("scrollBottomButton");
 
     if (!messages) {
         return;
     }
 
+    if ("scrollRestoration" in history) {
+        history.scrollRestoration = "manual";
+    }
+
     let previewUrls = [];
+
+    function scrollMessagesToBottom() {
+        const lastMessage = messages.lastElementChild;
+
+        if (lastMessage && typeof lastMessage.scrollIntoView === "function") {
+            lastMessage.scrollIntoView({ block: "end" });
+            return;
+        }
+
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    const messageObserver = new MutationObserver(function () {
+        requestAnimationFrame(scrollMessagesToBottom);
+    });
+    messageObserver.observe(messages, { childList: true, subtree: true });
+
+    function createAttachmentList(files) {
+        const container = document.createElement("div");
+        container.className = "message-attachments";
+
+        Array.from(files || []).forEach(function (file) {
+            const item = document.createElement("div");
+            item.className = "attachment-chip";
+
+            if (file.type && file.type.indexOf("image/") === 0) {
+                const url = URL.createObjectURL(file);
+                previewUrls.push(url);
+
+                const link = document.createElement("a");
+                link.className = "message-image-link";
+                link.href = url;
+                link.target = "_blank";
+                link.rel = "noopener";
+
+                const img = document.createElement("img");
+                img.className = "message-image";
+                img.src = url;
+                img.alt = file.name;
+
+                link.appendChild(img);
+                item.appendChild(link);
+            }
+
+            const label = document.createElement("span");
+            label.textContent = file.name;
+
+            item.appendChild(label);
+            container.appendChild(item);
+        });
+
+        return container;
+    }
 
     function renderFiles(files) {
         if (!attachmentPreview) {
@@ -76,7 +135,39 @@
         article.appendChild(body);
 
         messages.appendChild(article);
-        messages.scrollTop = messages.scrollHeight;
+        scrollMessagesToBottom();
+
+        return article;
+    }
+
+    function appendPendingUserMessage(text, files) {
+        const article = document.createElement("article");
+        article.className = "message user pending";
+
+        const meta = document.createElement("div");
+        meta.className = "message-meta";
+
+        const strong = document.createElement("strong");
+        strong.textContent = "You";
+
+        const span = document.createElement("span");
+        span.textContent = "Sending...";
+
+        meta.appendChild(strong);
+        meta.appendChild(span);
+        article.appendChild(meta);
+
+        if (files && files.length > 0) {
+            article.appendChild(createAttachmentList(files));
+        }
+
+        const body = document.createElement("div");
+        body.className = "message-body";
+        body.textContent = text;
+        article.appendChild(body);
+
+        messages.appendChild(article);
+        scrollMessagesToBottom();
 
         return article;
     }
@@ -84,6 +175,25 @@
     if (attachmentInput) {
         attachmentInput.addEventListener("change", function (event) {
             renderFiles(event.target.files);
+        });
+    }
+
+    if (scrollTopButton) {
+        scrollTopButton.addEventListener("click", function () {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            messages.scrollTo({ top: 0, behavior: "smooth" });
+
+            const firstMessage = messages.firstElementChild;
+            if (firstMessage && typeof firstMessage.scrollIntoView === "function") {
+                firstMessage.scrollIntoView({ block: "start", behavior: "smooth" });
+            }
+        });
+    }
+
+    if (scrollBottomButton) {
+        scrollBottomButton.addEventListener("click", function () {
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
+            scrollMessagesToBottom();
         });
     }
 
@@ -123,15 +233,24 @@
             event.preventDefault();
 
             const text = messageInput.value;
+            const files = attachmentInput ? attachmentInput.files : null;
 
-            if (!text || !text.trim()) {
+            if ((!text || !text.trim()) && (!files || files.length === 0)) {
                 return;
             }
 
-            appendMessage("USER", text, "Sending...");
+            const pendingUserMessage = appendPendingUserMessage(text, files);
             appendMessage("AI", "Generating response...", "Thinking...");
 
             const formData = new FormData(composerForm);
+
+            messageInput.value = "";
+            if (attachmentInput) {
+                attachmentInput.value = "";
+            }
+            if (attachmentPreview) {
+                attachmentPreview.innerHTML = "";
+            }
 
             sendButton.disabled = true;
             messageInput.disabled = true;
@@ -158,18 +277,20 @@
             } finally {
                 sendButton.disabled = false;
                 messageInput.disabled = false;
-                messageInput.value = "";
-
-                if (attachmentInput) {
-                    attachmentInput.value = "";
-                }
-
-                if (attachmentPreview) {
-                    attachmentPreview.innerHTML = "";
-                }
             }
         });
     }
 
-    messages.scrollTop = messages.scrollHeight;
+    requestAnimationFrame(function () {
+        scrollMessagesToBottom();
+        requestAnimationFrame(scrollMessagesToBottom);
+    });
+    window.addEventListener("load", function () {
+        setTimeout(scrollMessagesToBottom, 0);
+        setTimeout(scrollMessagesToBottom, 100);
+        setTimeout(scrollMessagesToBottom, 250);
+    });
+    window.addEventListener("pageshow", function () {
+        requestAnimationFrame(scrollMessagesToBottom);
+    });
 })();
