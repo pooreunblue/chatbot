@@ -21,8 +21,11 @@ public class NIMChatProvider implements ChatProvider {
             URI.create("https://integrate.api.nvidia.com/v1/chat/completions");
     private static final Gson GSON = new Gson();
     private static final String SYSTEM_PROMPT = """
-        �����ϰ� �亯�ϼ���.
-        """;
+            친절한 말투로, 가능한 한글로 답변하세요.
+            
+            절대로 추론 과정, reasoning, chain of thought, thinking process를 출력하지 마세요.
+            사용자의 질문에 대한 최종 답변만 출력하세요.
+            """;
 
     private static final Message SYSTEM_MESSAGE =
             new Message("system", SYSTEM_PROMPT);
@@ -96,12 +99,14 @@ public class NIMChatProvider implements ChatProvider {
                     || completion.choices().isEmpty()
                     || completion.choices().get(0).message() == null
                     || completion.choices().get(0).message().content() == null) {
-                throw new IllegalStateException("NIM API ���信 �޽����� �����ϴ�.");
+                throw new IllegalStateException("NIM API 응답에 메시지가 없습니다.");
             }
-            return completion.choices().get(0).message().content();
+            return ProviderResponseUtil.cleanText(
+                    completion.choices().get(0).message().content()
+            );
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return errorMessage("NIM API ��û�� �ߴܵǾ����ϴ�.");
+            return errorMessage("NIM API 요청이 중단되었습니다.");
         } catch (IOException | RuntimeException e) {
             e.printStackTrace();
             return errorMessage(e.getMessage());
@@ -110,7 +115,7 @@ public class NIMChatProvider implements ChatProvider {
 
     private void validateApiKey() {
         if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("NVIDIA_API_KEY ȯ�溯���� �����Ǿ� ���� �ʽ��ϴ�.");
+            throw new IllegalStateException("NVIDIA_API_KEY 환경변수가 설정되지 않았습니다.");
         }
     }
 
@@ -124,16 +129,16 @@ public class NIMChatProvider implements ChatProvider {
             JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
             JsonObject error = root.getAsJsonObject("error");
             if (error != null && error.has("message")) {
-                return "NIM API ���� (%d): %s"
+                return "NIM API 오류 (%d): %s"
                         .formatted(response.statusCode(), error.get("message").getAsString());
             }
         } catch (RuntimeException ignored) {
         }
-        return "NIM API ���� (HTTP %d)".formatted(response.statusCode());
+        return "NIM API 오류 (HTTP %d)".formatted(response.statusCode());
     }
 
     private static String errorMessage(String message) {
-        return "������ ������ : %s".formatted(message);
+        return ProviderResponseUtil.userFriendlyError("NIM");
     }
 
     private static final NIMChatProvider instance = new NIMChatProvider();

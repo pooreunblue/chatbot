@@ -21,10 +21,10 @@ public class GenAIChatProvider implements ChatProvider {
                     chat.model(),
                     chat.message(),
                     GenAIConfig.getGenerateContentConfig());
-            return response.text();
+            return ProviderResponseUtil.cleanText(response.text());
         } catch (Exception e) {
             e.printStackTrace();
-            return "문제가 생겼어요 : %s".formatted(e.getMessage());
+            return ProviderResponseUtil.userFriendlyTemporaryError("Gemini");
         }
     }
 
@@ -67,10 +67,10 @@ public class GenAIChatProvider implements ChatProvider {
                     newChat.model(),
                     contents,
                     GenAIConfig.getGenerateContentConfig());
-            return response.text();
+            return ProviderResponseUtil.cleanText(response.text());
         } catch (Exception e) {
             e.printStackTrace();
-            return "문제가 생겼어요 : %s".formatted(e.getMessage());
+            return ProviderResponseUtil.userFriendlyTemporaryError("Gemini");
         }
     }
 

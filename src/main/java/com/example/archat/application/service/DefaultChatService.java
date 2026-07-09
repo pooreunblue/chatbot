@@ -13,7 +13,6 @@ import com.example.archat.infrastructure.repository.SupabaseChatRepository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Set;
 
 public class DefaultChatService implements ChatService {
 
@@ -21,27 +20,6 @@ public class DefaultChatService implements ChatService {
     private final ChatProvider geminiProvider;
     private final ChatProvider groqProvider;
     private final ChatProvider nimProvider;
-
-    private static final Set<String> GEMINI_MODELS = Set.of(
-            "gemini-3.1-flash-lite",
-            "gemma-4-26b-a4b-it",
-            "gemma-4-31b-it"
-    );
-
-    private static final Set<String> GROQ_MODELS = Set.of(
-            "openai/gpt-oss-20b",
-            "openai/gpt-oss-120b",
-            "llama-3.1-8b-instant",
-            "llama-3.3-70b-versatile",
-            "groq/compound",
-            "groq/compound-mini",
-            "qwen/qwen3-32b"
-    );
-
-    private static final Set<String> NIM_MODELS = Set.of(
-            "nvidia/nemotron-3-ultra-550b-a55b",
-            "deepseek-ai/deepseek-v4-pro"
-    );
 
     private DefaultChatService() {
         this.chatRepository = SupabaseChatRepository.getInstance();
@@ -80,7 +58,9 @@ public class DefaultChatService implements ChatService {
     @Override
     public void saveUserMessage(Long conversationId, String userId, String message, String model, List<ChatAttachment> attachments) {
         boolean hasImageAttachment = attachments != null && attachments.stream().anyMatch(ChatAttachment::isImage);
-        String effectiveModel = hasImageAttachment ? "gemini-3.1-flash-lite" : model;
+        String effectiveModel = hasImageAttachment
+                ? ChatModelCatalog.getImageAttachmentModel()
+                : ChatModelCatalog.requireSupportedModel(model);
         Chat userChat = new Chat(
                 null,
                 conversationId,
@@ -122,16 +102,13 @@ public class DefaultChatService implements ChatService {
     }
 
     private ChatProvider selectProvider(String model) {
-        if (GEMINI_MODELS.contains(model)) {
-            return geminiProvider;
-        }
-        if (GROQ_MODELS.contains(model)) {
-            return groqProvider;
-        }
-        if (NIM_MODELS.contains(model)) {
-            return nimProvider;
-        }
-        throw new IllegalArgumentException("Unsupported model: " + model);
+        ChatModelCatalog.ProviderType providerType = ChatModelCatalog.getProviderType(model);
+
+        return switch (providerType) {
+            case GEMINI -> geminiProvider;
+            case GROQ -> groqProvider;
+            case NIM -> nimProvider;
+        };
     }
 
     private String createConversationTitle(String openingMessage) {
