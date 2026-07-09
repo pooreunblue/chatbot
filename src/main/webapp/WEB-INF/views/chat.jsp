@@ -11,10 +11,14 @@
 </head>
 <body>
 <c:set var="activeTitle" value="New chat"/>
+<c:set var="activeModel" value=""/>
 <c:forEach var="conversation" items="${conversations}">
     <c:if test="${conversation.conversationId eq activeConversationId}">
         <c:set var="activeTitle" value="${conversation.title}"/>
     </c:if>
+</c:forEach>
+<c:forEach var="chat" items="${chats}">
+    <c:set var="activeModel" value="${chat.model}"/>
 </c:forEach>
 <div class="app">
     <aside class="sidebar">
@@ -95,7 +99,6 @@
                             <div class="message-meta">
                                 <strong>${chat.owner eq 'USER' ? 'You' : 'ArChat'}</strong><span>${chat.model} | ${chat.timestamp}</span>
                             </div>
-                            <div class="message-body">${chat.message}</div>
                             <c:if test="${not empty chat.attachments}">
                                 <div class="message-attachments">
                                     <c:forEach var="attachment" items="${chat.attachments}">
@@ -117,6 +120,7 @@
                                     </c:forEach>
                                 </div>
                             </c:if>
+                            <div class="message-body">${chat.message}</div>
                         </article>
                     </c:forEach>
                 </c:otherwise>
@@ -142,24 +146,24 @@
                         <div class="composer-right">
                             <select name="model">
                                 <optgroup label="Google AI">
-                                    <option value="gemma-4-26b-a4b-it">gemma-4-26b-a4b-it</option>
-                                    <option value="gemma-4-31b-it">gemma-4-31b-it</option>
-                                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+                                    <option value="gemma-4-26b-a4b-it" ${activeModel eq 'gemma-4-26b-a4b-it' ? 'selected' : ''}>gemma-4-26b-a4b-it</option>
+                                    <option value="gemma-4-31b-it" ${activeModel eq 'gemma-4-31b-it' ? 'selected' : ''}>gemma-4-31b-it</option>
+                                    <option value="gemini-3.1-flash-lite" ${activeModel eq 'gemini-3.1-flash-lite' ? 'selected' : ''}>gemini-3.1-flash-lite</option>
                                 </optgroup>
                                 <optgroup label="Groq">
-                                    <option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option>
-                                    <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
-                                    <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-                                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
-                                    <option value="groq/compound-mini">groq/compound-mini</option>
-                                    <option value="groq/compound">groq/compound</option>
-                                    <option value="qwen/qwen3-32b">qwen/qwen3-32b</option>
+                                    <option value="openai/gpt-oss-20b" ${activeModel eq 'openai/gpt-oss-20b' ? 'selected' : ''}>openai/gpt-oss-20b</option>
+                                    <option value="openai/gpt-oss-120b" ${activeModel eq 'openai/gpt-oss-120b' ? 'selected' : ''}>openai/gpt-oss-120b</option>
+                                    <option value="llama-3.1-8b-instant" ${activeModel eq 'llama-3.1-8b-instant' ? 'selected' : ''}>llama-3.1-8b-instant</option>
+                                    <option value="llama-3.3-70b-versatile" ${activeModel eq 'llama-3.3-70b-versatile' ? 'selected' : ''}>llama-3.3-70b-versatile</option>
+                                    <option value="groq/compound-mini" ${activeModel eq 'groq/compound-mini' ? 'selected' : ''}>groq/compound-mini</option>
+                                    <option value="groq/compound" ${activeModel eq 'groq/compound' ? 'selected' : ''}>groq/compound</option>
+                                    <option value="qwen/qwen3-32b" ${activeModel eq 'qwen/qwen3-32b' ? 'selected' : ''}>qwen/qwen3-32b</option>
                                 </optgroup>
                                 <optgroup label="NVIDIA NIM">
-                                    <option value="nvidia/nemotron-3-ultra-550b-a55b">
+                                    <option value="nvidia/nemotron-3-ultra-550b-a55b" ${activeModel eq 'nvidia/nemotron-3-ultra-550b-a55b' ? 'selected' : ''}>
                                         nvidia/nemotron-3-ultra-550b-a55b
                                     </option>
-                                    <option value="deepseek-ai/deepseek-v4-pro">deepseek-ai/deepseek-v4-pro</option>
+                                    <option value="deepseek-ai/deepseek-v4-pro" ${activeModel eq 'deepseek-ai/deepseek-v4-pro' ? 'selected' : ''}>deepseek-ai/deepseek-v4-pro</option>
                                 </optgroup>
                             </select>
                             <button class="send-button" type="submit">Send</button>
@@ -168,6 +172,12 @@
                 </form>
             </div>
         </div>
+        <button type="button" class="scroll-button scroll-top-button" id="scrollTopButton" aria-label="Scroll to top">
+            &rarr; Top
+        </button>
+        <button type="button" class="scroll-button scroll-bottom-button" id="scrollBottomButton" aria-label="Scroll to bottom">
+            &rarr; Bottom
+        </button>
     </main>
 </div>
 <script src="${pageContext.request.contextPath}/js/chat.js?v=1"></script>
